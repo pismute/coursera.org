@@ -50,4 +50,5 @@ class QuickCheckSuite extends FunSuite with Checkers {
   test("Bogus (5) binomial heap does not satisfy properties.") {
     checkBogus(new QuickCheckHeap with Bogus5BinomialHeap)
   }
+
 }

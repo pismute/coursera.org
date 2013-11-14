@@ -20,12 +20,11 @@ abstract class QuickCheckHeap extends Properties("Heap") with IntHeap{
   }
 
   lazy val genHeap: Gen[H] = for {
-    a <- arbitrary[A]
+    a <- arbitrary[A] if a > 0
     h <- oneOf(value(empty), genHeap)
-  } yield meld(insert(a, empty), h)
+  } yield insert(a, h)
 
   implicit lazy val arbHeap: Arbitrary[H] = Arbitrary(genHeap)
-
 
   val genIntPair = for {
     v1 <- arbitrary[Int]
@@ -42,12 +41,22 @@ abstract class QuickCheckHeap extends Properties("Heap") with IntHeap{
   }
 
   property("hint3") = forAll(genHeap) { h =>
-    def rebuild(o:H, n:H = empty):H = o match {
-        val oo = deleteMin(o)
-        rebuild(oo, meld(n, insert(findMin(o), oo)))
+      case _ if isEmpty(h) => true
+      case _ => deleteMin(h) match {
+        case hh if isEmpty(hh) => true
+        case hh => ord.compare(findMin(h), findMin(hh)) match {
+          case dd if d != 0 && d != dd =>
+            println("h:"+findMin(h))
+            println("hh:"+findMin(hh))
+            println("d:"+d)
+            println("dd:"+dd)
+            false
+          case dd => f(hh, dd)
+        }
+      }
     }
 
-    findMin( h ) == findMin( rebuild(h) )
+    f(h, 0)
   }
 
   val genHeapPair = for {
