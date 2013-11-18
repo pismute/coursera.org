@@ -7,7 +7,7 @@ class Wire {
   private var actions: List[Simulator#Action] = List()
 
   def getSignal: Boolean = sigVal
-  
+
   def setSignal(s: Boolean) {
     if (s != sigVal) {
       sigVal = s
@@ -59,15 +59,48 @@ abstract class CircuitSimulator extends Simulator {
   //
 
   def orGate(a1: Wire, a2: Wire, output: Wire) {
-    ???
-  }
-  
-  def orGate2(a1: Wire, a2: Wire, output: Wire) {
-    ???
+    def orAction() {
+      val a1Sig = a1.getSignal
+      val a2Sig = a2.getSignal
+      afterDelay(OrGateDelay) { output.setSignal(a1Sig | a2Sig) }
+    }
+    a1 addAction orAction
+    a2 addAction orAction
   }
 
-  def demux(in: Wire, c: List[Wire], out: List[Wire]) {
-    ???
+  def orGate2(a1: Wire, a2: Wire, output: Wire) {
+    val a11, a22, o = new Wire
+    inverter(a1, a11)
+    inverter(a2, a22)
+    andGate(a11, a22, o)
+    inverter(o, output)
+  }
+
+  /*
+    In C0 C1 | O0 O1 O2 O3
+    -------------------------
+    0  0  0  | 0  0  0  0
+    0  0  1  | 0  0  0  0
+    0  1  0  | 0  0  0  0
+    0  1  1  | 0  0  0  0
+    1  0  0  | 0  0  0  1
+    1  0  1  | 0  0  1  0
+    1  1  0  | 0  1  0  0
+    1  1  1  | 1  0  0  0
+   */
+  def demux(in: Wire, c: List[Wire], out: List[Wire]):Unit = c match {
+    case Nil => andGate(in, in, out.head)
+    case cn :: tail =>
+      val half = out.size/2
+
+      val cnNot, left, right  = new Wire
+
+      inverter(cn, cnNot)
+      andGate(in, cn, left)
+      andGate(in, cnNot, right)
+
+      demux( left, tail, out.take( half ))
+      demux( right, tail, out.drop( half ))
   }
 
 }
