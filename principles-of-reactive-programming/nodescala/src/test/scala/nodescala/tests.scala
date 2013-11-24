@@ -51,6 +51,28 @@ class NodeScalaSuite extends FunSuite {
     assert(Await.result(p.future, 1 second) == "done")
   }
 
+  test("A Future should complete after 3s when using a delay of 1s"){
+    val p = Promise[String]()
+
+    Future {
+      Try(Future.delay(1 second))
+      Try(Future.delay(1 second))
+      Try(Future.delay(1 second))
+
+      p.success("hola")
+    }
+
+    intercept[TimeoutException] {
+      Await.result(p.future, 3 second)
+    }
+  }
+
+  test("A Future should not complete after 1s when using a delay of 3s"){
+    intercept[TimeoutException] {
+      Await.result(Future.delay(3 second), 1 second)
+    }
+  }
+
   class DummyExchange(val request: Request) extends Exchange {
     @volatile var response = ""
     val loaded = Promise[String]()
@@ -152,7 +174,3 @@ class NodeScalaSuite extends FunSuite {
   }
 
 }
-
-
-
-
