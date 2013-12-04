@@ -16,6 +16,7 @@ import rx.lang.scala.Observable
 import rx.lang.scala.Subscription
 import observablex._
 import search._
+import rx.lang.scala.subjects._
 
 object WikipediaSuggest extends SimpleSwingApplication with ConcreteSwingApi with ConcreteWikipediaApi {
 
@@ -81,26 +82,56 @@ object WikipediaSuggest extends SimpleSwingApplication with ConcreteSwingApi wit
      */
 
     // TO IMPLEMENT
-    val searchTerms: Observable[String] = ???
+    val searchTerms: Observable[String] = searchTermField.textValues
 
     // TO IMPLEMENT
-    val suggestions: Observable[Try[List[String]]] = ???
+    val suggestions: Observable[Try[List[String]]] =
+      searchTerms.concatRecovered { term =>
+        val subject = AsyncSubject[List[String]]()
+
+        val f = wikipediaSuggestion(term)
+
+        f onComplete {
+          case Failure(e) ⇒ { subject.onError(e) }
+          case Success(c) ⇒ { subject.onNext(c); subject.onCompleted() }
+        }
+        subject
+      }
 
 
     // TO IMPLEMENT
     val suggestionSubscription: Subscription =  suggestions.observeOn(eventScheduler) subscribe {
-      x => ???
+      tryValue => tryValue.foreach(suggestionList.listData_=)
     }
 
     // TO IMPLEMENT
-    val selections: Observable[String] = ???
+    val selections: Observable[String] = {
+      val subject = PublishSubject[String]("")
+      button.clicks.subscribe { t =>
+        println("selections")
+        suggestionList.selection.items.map(subject.onNext)
+      }
+      subject
+    }
 
     // TO IMPLEMENT
-    val pages: Observable[Try[String]] = ???
+    val pages: Observable[Try[String]] =
+      selections.concatRecovered { term =>
+        val subject = AsyncSubject[String]()
+
+        println("pages")
+        val f = wikipediaPage(term)
+
+        f onComplete {
+          case Failure(e) ⇒ { subject.onError(e) }
+          case Success(c) ⇒ { subject.onNext(c); subject.onCompleted() }
+        }
+        subject
+    }
 
     // TO IMPLEMENT
     val pageSubscription: Subscription = pages.observeOn(eventScheduler) subscribe {
-      x => ???
+      tryValue => println("pageSubscription");tryValue.foreach(editorpane.text_=)
     }
 
   }

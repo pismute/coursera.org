@@ -10,6 +10,8 @@ import scala.util.{Try, Success, Failure}
 import rx.lang.scala._
 import org.scalatest._
 import gui._
+import rx.lang.scala.Notification.{ OnNext, OnError, OnCompleted }
+import rx.lang.scala.subjects._
 
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
@@ -65,6 +67,52 @@ class WikipediaApiTest extends FunSuite {
     val sub = sum.subscribe {
       s => total = s
     }
+
     assert(total == (1 + 1 + 2 + 1 + 2 + 3), s"Sum: $total")
+  }
+
+  test("about complete"){
+    def echo[T](head:String, obs:Observable[T]) =
+      obs.materialize.subscribe( x => x match {
+        case OnNext(t) => println(s"$head:$t")
+        case OnError(e) => println(s"$head:$e")
+        case OnCompleted() => println(s"$head:complete")
+      })
+
+    echo( "Observable(1,2,3)", Observable(1,2,3) )
+    echo( ".recovered", Observable(1,2,3).recovered )
+
+    echo( "concatRecovered", Observable(1,2,3,4,5).concatRecovered (t=> t match {
+      case 4 => Observable(new Exception)
+      case n => Observable(n)
+    }))
+  }
+
+  test("cancatRecovered1"){
+    val exception = new Exception;
+    val result = Observable(1,2,3,4,5).concatRecovered (t=> t match {
+      case 4 => Observable(exception)
+      case n => Observable(n)
+    }).toBlockingObservable.toList
+
+    assert( result == List(Success(1), Success(2), Success(3), Failure(exception), Success(5)), result)
+  }
+
+  test("cancatRecovered2"){
+    val exception = new Exception;
+    val result = Observable(1,2,3).concatRecovered (t=> Observable(t, t, t)).toBlockingObservable.toList
+    val oracle = List(Success(1), Success(1), Success(1), Success(2), Success(2), Success(2), Success(3), Success(3), Success(3))
+
+    assert( result == oracle, result)
+  }
+
+  test("""|Observable(1, 2, 3).zip(Observable.interval(700 millis)).timedOut(1L)
+          |should return the first value, and complete without errors
+       |""".stripMargin.replace("\n","")){
+    Observable(1, 2, 3).zip(Observable.interval(700 millis))
+      .timedOut(1L)
+      .subscribe{ t =>
+        assert(t._1 == 1, t._1)
+      }
   }
 }
