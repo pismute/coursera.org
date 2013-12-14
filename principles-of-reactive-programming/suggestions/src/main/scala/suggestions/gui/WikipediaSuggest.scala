@@ -86,54 +86,44 @@ object WikipediaSuggest extends SimpleSwingApplication with ConcreteSwingApi wit
 
     // TO IMPLEMENT
     val suggestions: Observable[Try[List[String]]] =
-      searchTerms.concatRecovered { term =>
-        val subject = AsyncSubject[List[String]]()
-
-        val f = wikipediaSuggestion(term)
-
-        f onComplete {
-          case Failure(e) ⇒ { subject.onError(e) }
-          case Success(c) ⇒ { subject.onNext(c); subject.onCompleted() }
-        }
-        subject
-      }
+      searchTerms.concatRecovered (wikiSuggestResponseStream)
 
 
     // TO IMPLEMENT
-    val suggestionSubscription: Subscription =  suggestions.observeOn(eventScheduler) subscribe {
-      tryValue => tryValue.foreach(suggestionList.listData_=)
-    }
+    val suggestionSubscription: Subscription =
+      suggestions.observeOn(eventScheduler).subscribe{ tryValue =>
+        tryValue match {
+          case Success(v) => suggestionList.listData = v
+          case Failure(e) => status.text = e.toString
+        }
+      }
 
     // TO IMPLEMENT
     val selections: Observable[String] = {
-      val subject = PublishSubject[String]("")
-      button.clicks.subscribe { t =>
-        println("selections")
-        suggestionList.selection.items.map(subject.onNext)
-      }
-      subject
+      val items = suggestionList.selection.items
+
+      button.clicks.filter(b=> !items.isEmpty ).map(b=> items.head)
+
     }
 
     // TO IMPLEMENT
     val pages: Observable[Try[String]] =
-      selections.concatRecovered { term =>
-        val subject = AsyncSubject[String]()
-
-        println("pages")
-        val f = wikipediaPage(term)
-
-        f onComplete {
-          case Failure(e) ⇒ { subject.onError(e) }
-          case Success(c) ⇒ { subject.onNext(c); subject.onCompleted() }
-        }
-        subject
-    }
+      selections.concatRecovered { s =>
+        println(s"pages:$s")
+        wikiPageResponseStream(s)
+      }
 
     // TO IMPLEMENT
-    val pageSubscription: Subscription = pages.observeOn(eventScheduler) subscribe {
-      tryValue => println("pageSubscription");tryValue.foreach(editorpane.text_=)
-    }
-
+    val pageSubscription: Subscription =
+      pages.observeOn(eventScheduler).subscribe { tryValue =>
+        tryValue match {
+          case Success(v) =>
+            println(s"pageSubscription:$v")
+            editorpane.text = v
+          case Failure(e) =>
+            status.text = e.toString
+        }
+      }
   }
 
 }
