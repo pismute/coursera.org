@@ -5,6 +5,7 @@ package actorbintree
 
 import akka.actor._
 import scala.collection.immutable.Queue
+import akka.event.LoggingReceive
 
 object BinaryTreeSet {
 
@@ -43,7 +44,7 @@ object BinaryTreeSet {
     * `result` is true if and only if the element is present in the tree.
     */
   case class ContainsResult(id: Int, result: Boolean) extends OperationReply
-  
+
   /** Message to signal successful completion of an insert or remove operation. */
   case class OperationFinished(id: Int) extends OperationReply
 
@@ -66,14 +67,24 @@ class BinaryTreeSet extends Actor {
 
   // optional
   /** Accepts `Operation` and `GC` messages. */
-  val normal: Receive = { case _ => ??? }
+  val normal: Receive = {
+    case op:Operation => root ! op
+    case GC =>
+      val oldRoot = root
+      root = createRoot
+      context.become( this.garbageCollecting(root) )
+
+      oldRoot ! CopyTo(root)
+  }
 
   // optional
   /** Handles messages while garbage collection is performed.
     * `newRoot` is the root of the new binary tree where we want to copy
     * all non-removed elements into.
     */
-  def garbageCollecting(newRoot: ActorRef): Receive = ???
+  def garbageCollecting(newRoot: ActorRef): Receive = {
+    case op:Operation => pendingQueue :+ op
+  }
 
 }
 
@@ -86,10 +97,10 @@ object BinaryTreeNode {
   case class CopyTo(treeNode: ActorRef)
   case object CopyFinished
 
-  def props(elem: Int, initiallyRemoved: Boolean) = Props(classOf[BinaryTreeNode],  elem, initiallyRemoved)
+  def props(elem: Int, initiallyRemoved: Boolean = false) = Props(classOf[BinaryTreeNode],  elem, initiallyRemoved)
 }
 
-class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor {
+class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor with ActorLogging{
   import BinaryTreeNode._
   import BinaryTreeSet._
 
@@ -99,9 +110,51 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor {
   // optional
   def receive = normal
 
+  def move(e:Int) =
+    if( e < elem ) Some(Left)
+    else if( e > elem) Some(Right)
+    else if ( removed ) Some(Left)
+    else None
+
   // optional
   /** Handles `Operation` messages and `CopyTo` requests. */
-  val normal: Receive = { case _ => ??? }
+  val normal: Receive = LoggingReceive {
+    case op @ Insert(requester, id, e) =>
+      move(e) match {
+        case Some(pos) =>
+          subtrees.get(pos) match {
+            case Some(actor) => actor ! op
+            case None =>
+              subtrees += pos -> context.actorOf(BinaryTreeNode.props(e))
+              requester ! OperationFinished(id: Int)
+          }
+        case None => requester ! OperationFinished(id: Int)
+      }
+    case op @ Remove(requester, id, e) =>
+      move(e) match {
+        case Some(pos) =>
+          subtrees.get(pos) match {
+            case Some(actor) => actor ! op
+            case None => None
+          }
+        case None =>
+          removed = true
+          requester ! OperationFinished(id: Int)
+      }
+    case op @ Contains(requester, id, e) =>
+      move(e) match {
+        case Some(pos) =>
+          subtrees.get(pos) match {
+            case Some(actor) => actor ! op
+            case None => requester ! ContainsResult(id, false)
+          }
+        case None => requester ! ContainsResult(id, true)
+      }
+    case op @ CopyTo(root) =>
+      this.subtrees.get(Left).foreach( _ ! op )
+      this.subtrees.get(Right).foreach( _ ! op )
+      if( !this.removed ) root ! Insert(self, 1, this.elem)
+  }
 
   // optional
   /** `expected` is the set of ActorRefs whose replies we are waiting for,

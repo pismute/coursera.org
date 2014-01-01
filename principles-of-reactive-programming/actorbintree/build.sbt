@@ -158,3 +158,11 @@ commonSourcePackages += "common"
 // Packages in src/test/scala that are used for grading projects. Always included
 // compiling tests, grading a project.
 gradingTestPackages += "grading"
+
+javaOptions in Test ++= Seq(
+  "-Dakka.loglevel=DEBUG",
+  "-Dakka.actor.debug.receive=on"
+)
+
+fork in Test := true
+
