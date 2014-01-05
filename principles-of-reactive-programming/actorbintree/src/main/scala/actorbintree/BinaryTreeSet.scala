@@ -83,7 +83,12 @@ class BinaryTreeSet extends Actor {
     * all non-removed elements into.
     */
   def garbageCollecting(newRoot: ActorRef): Receive = {
-    case op:Operation => pendingQueue :+ op
+    case op:Operation => this.pendingQueue :+= op
+    case CopyFinished =>
+      this.pendingQueue.foreach( root ! _ )
+      this.pendingQueue = Queue.empty[Operation]
+
+      context.become(normal)
   }
 
 }
@@ -118,7 +123,7 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor wit
 
   // optional
   /** Handles `Operation` messages and `CopyTo` requests. */
-  val normal: Receive = LoggingReceive {
+  val normal: Receive = {
     case op @ Insert(requester, id, e) =>
       move(e) match {
         case Some(pos) =>
@@ -151,15 +156,34 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor wit
         case None => requester ! ContainsResult(id, true)
       }
     case op @ CopyTo(root) =>
-      this.subtrees.get(Left).foreach( _ ! op )
-      this.subtrees.get(Right).foreach( _ ! op )
       if( !this.removed ) root ! Insert(self, 1, this.elem)
+
+      if( this.subtrees.isEmpty ){
+        sender ! CopyFinished
+      }else {
+        val children = this.subtrees.values.toSet
+
+        children.foreach( _ ! op )
+
+        context.become( this.copying( sender, children, this.removed == false ) )
+      }
   }
 
   // optional
   /** `expected` is the set of ActorRefs whose replies we are waiting for,
     * `insertConfirmed` tracks whether the copy of this node to the new tree has been confirmed.
     */
-  def copying(expected: Set[ActorRef], insertConfirmed: Boolean): Receive = ???
+  def copying(parent:ActorRef, expected: Set[ActorRef], insertConfirmed: Boolean): Receive = {
+    case CopyFinished =>
+      val newExpected = expected - sender
+
+      if( newExpected.isEmpty ) {
+        context.become( normal )
+
+        parent ! CopyFinished
+      } else {
+        context.become( this.copying(parent, newExpected, insertConfirmed) )
+      }
+  }
 
 }

@@ -83,6 +83,24 @@ class BinaryTreeSuite(_system: ActorSystem) extends TestKit(_system) with FunSui
     verify(requester, ops, expectedReplies)
   }
 
+  test("test copying") {
+    val requester = TestProbe()
+    val requesterRef = requester.ref
+    val ops = List(
+      Insert(requesterRef, id=10, 1),
+      Insert(requesterRef, id=20, 2),
+      Insert(requesterRef, id=30, 3)
+      )
+
+    val expectedReplies = List(
+      OperationFinished(id=10),
+      OperationFinished(id=20),
+      OperationFinished(id=30)
+      )
+
+    verify(requester, ops, expectedReplies)
+  }
+
   ignore("behave identically to built-in set (includes GC)") {
     val rnd = new Random()
     def randomOperations(requester: ActorRef, count: Int): Seq[Operation] = {
