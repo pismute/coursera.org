@@ -59,6 +59,13 @@ class BinaryTreeSuite(_system: ActorSystem) extends TestKit(_system) with FunSui
     expectMsg(ContainsResult(3, true))
   }
 
+  test("remove non-existing nodes") {
+    val topNode = system.actorOf(Props[BinaryTreeSet])
+
+    topNode ! Remove(testActor, id=10, 1)
+    expectMsg(OperationFinished(10))
+  }
+
   test("instruction example") {
     val requester = TestProbe()
     val requesterRef = requester.ref
@@ -101,7 +108,31 @@ class BinaryTreeSuite(_system: ActorSystem) extends TestKit(_system) with FunSui
     verify(requester, ops, expectedReplies)
   }
 
-  ignore("behave identically to built-in set (includes GC)") {
+  test("insert after being removed") {
+    val requester = TestProbe()
+    val requesterRef = requester.ref
+    val ops = List(
+      Insert(requesterRef, id=10, 1),
+      Contains(requesterRef, id=11, 1),
+      Remove(requesterRef, id=20, 1),
+      Contains(requesterRef, id=21, 1),
+      Insert(requesterRef, id=30, 1),
+      Contains(requesterRef, id=31, 1)
+      )
+
+    val expectedReplies = List(
+      OperationFinished(id=10),
+      ContainsResult(id=11, true),
+      OperationFinished(id=20),
+      ContainsResult(id=21, false),
+      OperationFinished(id=30),
+      ContainsResult(id=31, true)
+      )
+
+    verify(requester, ops, expectedReplies)
+  }
+
+  test("behave identically to built-in set (includes GC)") {
     val rnd = new Random()
     def randomOperations(requester: ActorRef, count: Int): Seq[Operation] = {
       def randomElement: Int = rnd.nextInt(100)
@@ -142,6 +173,7 @@ class BinaryTreeSuite(_system: ActorSystem) extends TestKit(_system) with FunSui
       topNode ! op
       if (rnd.nextDouble() < 0.1) topNode ! GC
     }
+
     receiveN(requester, ops, expectedReplies)
   }
 }

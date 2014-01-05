@@ -118,12 +118,11 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor wit
   def move(e:Int) =
     if( e < elem ) Some(Left)
     else if( e > elem) Some(Right)
-    else if ( removed ) Some(Left)
     else None
 
   // optional
   /** Handles `Operation` messages and `CopyTo` requests. */
-  val normal: Receive = {
+  val normal: Receive = LoggingReceive{
     case op @ Insert(requester, id, e) =>
       move(e) match {
         case Some(pos) =>
@@ -131,21 +130,26 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor wit
             case Some(actor) => actor ! op
             case None =>
               subtrees += pos -> context.actorOf(BinaryTreeNode.props(e))
-              requester ! OperationFinished(id: Int)
+              requester ! OperationFinished(id)
           }
-        case None => requester ! OperationFinished(id: Int)
+        case None =>
+          removed = false
+          requester ! OperationFinished(id)
       }
     case op @ Remove(requester, id, e) =>
       move(e) match {
         case Some(pos) =>
           subtrees.get(pos) match {
             case Some(actor) => actor ! op
-            case None => None
+            case None =>
+              requester ! OperationFinished(id)
           }
         case None =>
-          removed = true
-          requester ! OperationFinished(id: Int)
+          if ( !this.removed ) removed = true
+
+          requester ! OperationFinished(id)
       }
+
     case op @ Contains(requester, id, e) =>
       move(e) match {
         case Some(pos) =>
@@ -153,13 +157,14 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor wit
             case Some(actor) => actor ! op
             case None => requester ! ContainsResult(id, false)
           }
-        case None => requester ! ContainsResult(id, true)
+        case None => requester ! ContainsResult(id, this.removed == false)
       }
     case op @ CopyTo(root) =>
       if( !this.removed ) root ! Insert(self, 1, this.elem)
 
       if( this.subtrees.isEmpty ){
         sender ! CopyFinished
+        context.stop(self)
       }else {
         val children = this.subtrees.values.toSet
 
@@ -181,6 +186,7 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor wit
         context.become( normal )
 
         parent ! CopyFinished
+        context.stop(self)
       } else {
         context.become( this.copying(parent, newExpected, insertConfirmed) )
       }
