@@ -35,3 +35,6 @@ README.txt
 .idea
 
 .ensime*
+
+## exclude big file
+/big-data-analysis-with-scala-and-spark/wikipedia/src/main/resources/wikipedia/wikipedia.dat
