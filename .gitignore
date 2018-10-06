@@ -38,3 +38,4 @@ README.txt
 
 ## exclude big file
 /big-data-analysis-with-scala-and-spark/wikipedia/src/main/resources/wikipedia/wikipedia.dat
+/big-data-analysis-with-scala-and-spark/stackoverflow/src/main/resources/stackoverflow/stackoverflow.csv
